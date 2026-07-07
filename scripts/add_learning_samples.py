@@ -286,10 +286,11 @@ def write_template(path: Path) -> None:
 
 
 def run_prepare_dataset(dataset_root: Path) -> None:
-    from scripts.prepare_dataset import DatasetPaths, prepare_dataset, print_summary
+    import importlib
 
-    manifest = prepare_dataset(paths=DatasetPaths(root=dataset_root))
-    print_summary(manifest)
+    module = importlib.import_module("scripts.prepare_dataset")
+    manifest = module.prepare_dataset(paths=module.DatasetPaths(root=dataset_root))
+    module.print_summary(manifest)
 
 
 def parse_args() -> argparse.Namespace:

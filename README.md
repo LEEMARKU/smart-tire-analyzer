@@ -1,9 +1,12 @@
 # Smart Tire Analyzer
 
 <div align="center">
-  <h3>🚗 AI-Powered Cross-Platform Tire Intelligence System</h3>
+  <h3>AI-Powered Cross-Platform Tire Intelligence System</h3>
   <p>
-    CNN + Vision Transformer + RNN + ANN · Gemini AI Reasoning · Self-Correcting Learning
+    59 Model Architectures · Auto Model Selection · CNN + RNN + ANN · Gemini AI Reasoning
+  </p>
+  <p>
+    <strong>Live Chat</strong> (Llama 3.3 tire-only AI) · <strong>Voice AI Support</strong> (OmniDimension)
   </p>
 </div>
 
@@ -11,48 +14,34 @@
 
 ## Overview
 
-**Smart Tire Analyzer** is a production-grade, cross-platform AI system that analyzes tire condition from photographs using a hybrid deep learning model (CNN + ViT + RNN + ANN). It predicts tread depth, health score, remaining life, and wear pattern — then enriches results with Gemini AI reasoning, Google Maps road context, and live weather data.
+**Smart Tire Analyzer** analyzes tire condition from photographs using a hybrid deep learning model with **automatic architecture selection**. It supports 59 model variants (22 CNN, 12 Transformer, 9 RNN, 16 Fusion/ANN) and chooses the optimal combination based on dataset size. It predicts tread depth, health score, remaining life, condition (safe/moderate/replace), and wear pattern.<br><br>
+The project also includes a **Next.js frontend** with a Live Chat feature (Llama 3.3, tire-only questions) and a **Voice AI Support** agent (OmniDimension, Llama 3.3 70B) for tire and technical support calls.
 
-### ✅ What It Does
+### Current Test Performance (767-image dataset)
+
+| Metric | Accuracy |
+|--------|:--------:|
+| **Condition** (safe/moderate/replace) | **90.7%** |
+| **Wear Pattern** (6 classes) | **61.7%** |
+| **Tread Depth MAE** | **1.55 mm** |
+| **Health Score MAE** | 0.43 |
+| **Remaining Life MAE** | ~3,964 km |
+
+### Key Features
 
 | Feature | Detail |
-|---|---|
-| **Tread Depth Prediction** | 4-point measurement (T1–T4), MAE < 0.5mm |
-| **Health Score** | 0–10 scale with Monte Carlo uncertainty |
-| **Remaining Life** | km estimate adjusted for road + weather conditions |
+|---------|--------|
+| **Auto Model Selection** | Picks optimal CNN + RNN + ANN by dataset size (6 tiers) |
+| **59 Model Architectures** | 22 CNN · 12 Transformer · 9 RNN · 16 Fusion/ANN |
+| **Tread Depth Prediction** | 4-point measurement (T1–T4) |
+| **Condition Classification** | 3 classes: safe, moderate, replace |
 | **Wear Pattern Detection** | 6 classes: center, edge, patchy, uniform, one-side, cupping |
+| **24-Step Preprocessing** | Auto-rotate, shadow removal, GrabCut, CLAHE, edge detect, etc. |
+| **Class-Weighted Training** | Inverse-frequency weighting for imbalanced classes |
 | **Gemini AI Reasoning** | Context-aware driving advice and replacement urgency |
-| **Road Context** | Google Maps terrain + road surface + traffic |
-| **Weather Context** | Rain, temperature, visibility from OpenWeatherMap |
-| **Continuous Learning** | Session corrections stored → auto-retrain after 10 trainable samples |
-| **TurboQuant** | FP16 + INT8 quantization for mobile deployment |
-
----
-
-## Final Year Project Enterprise Upgrade
-
-The project now includes a local-runnable enterprise AI layer for final-year-project presentation:
-
-| Upgrade | Added implementation |
-|---|---|
-| MLOps Pipeline | `/enterprise/dashboard`, `scripts/mlops_pipeline.py`, local experiment events, model registry snapshot, DVC/Airflow/Kubeflow skeletons |
-| Edge AI | ONNX/TensorRT/Jetson/mobile inference readiness metadata and offline prediction workflow |
-| Explainable AI | Grad-CAM/SHAP/attention-style region metadata in every analysis report |
-| Confidence Scoring | Prediction confidence %, uncertainty %, and failure risk score |
-| Digital Twin | Physical tire state mirrored into a virtual tire lifecycle simulation |
-| Predictive Analytics | Remaining useful life, failure forecast window, and trend analysis |
-| IoT Fusion | Optional pressure, temperature, vibration, and speed fields in `/analyze` |
-| Cloud Native | Docker, Kubernetes, and microservice deployment status |
-| Security | Optional JWT/RBAC middleware with local demo token endpoint |
-| Monitoring | `/dashboard` frontend plus drift, health, GPU, latency, and error-log status |
-| Multi-Agent AI | Damage, maintenance, cost, and report-generation agents |
-| Federated Learning | Local secure-aggregation simulation status |
-| Knowledge Graph / RAG | Local maintenance knowledge retrieval with FAISS/Pinecone-ready design |
-| AI Report Generation | Technician notes and PDF-ready report metadata |
-| Synthetic Data | GAN/diffusion/augmentation research plan and output path |
-
-Open the dashboard at `http://127.0.0.1:3000/dashboard` after running `run_services.bat`.
-See `docs/FINAL_YEAR_PROJECT_ARCHITECTURE.md` for the architecture explanation.
+| **Continuous Learning** | User corrections → auto-retrain after 10 samples |
+| **Live Chat** | Llama 3.3 tire-only AI assistant on `/live-chat` |
+| **Voice AI Support** | OmniDimension voice agent (Llama 3.3 70B) on `/technical-support` |
 
 ---
 
@@ -61,41 +50,43 @@ See `docs/FINAL_YEAR_PROJECT_ARCHITECTURE.md` for the architecture explanation.
 ```
 📷 Tire Image
        ↓
-[10-Step Preprocessing Pipeline]
-  1. Blur Detection (reject < 100 Laplacian variance)
-  2. Tire Detection + Crop
-  3. Perspective Correction
-  4. Noise Reduction (NL-Means)
-  5. CLAHE Enhancement
-  6. Sharpening Filter
-  7. Edge Detection for runtime depth estimation
-  8. Resize (224x224)
-  9. Normalization (ImageNet stats)
-  10. Augmentation (training only)
+[24-Step Preprocessing Pipeline]
+  ├── Auto rotation correction (deskew via Hough lines)
+  ├── Shadow removal (LAB illumination estimation)
+  ├── Background removal (Hough circle + GrabCut refinement)
+  ├── Blur detection + deblurring
+  ├── CLAHE contrast enhancement
+  ├── Edge detection (4th channel)
+  ├── Resize (224x224) + ImageNet normalization
+  └── Augmentation (training only)
        ↓
-[CNN: EfficientNetV2-B0] -> 512-dim local tread features
-[Transformer: ViT-B/16] -> 512-dim global tread pattern features
-[RNN: BiLSTM + TCN] -> 256-dim sequential tread features
-       ↓
-[Fusion: Cross-Modal Attention + Deep Dense ANN]
+[Auto-Selected Architecture — example for 767 samples]
+  ├── CNN: EfficientNetV2-B0 → 512-dim local tread features
+  ├── RNN: BiLSTM → 256-dim sequential tread features
+  └── Fusion: Deep Dense ANN → 512-dim fused features
        ↓
 [Prediction Heads]
   ├── Tread Depth (×4 regression)
   ├── Health Score (regression)
   ├── Remaining Life (regression)
-  └── Wear Pattern (6-class classification)
+  ├── Wear Pattern (6-class classification)
+  └── Condition (3-class: safe/moderate/replace)
        ↓
 [Gemini AI Reasoning + Maps + Weather]
        ↓
 📊 Final Report
 ```
 
-| Component | Selected Model | Role |
-|---|---|---|
-| CNN | EfficientNetV2-B0 | Local tread feature extraction |
-| Transformer | ViT-B/16 | Global tread pattern understanding |
-| RNN | BiLSTM + TCN | Sequential tread analysis |
-| ANN | Cross-Modal Attention + Deep Dense Fusion | Final prediction fusion |
+Model auto-selection tiers:
+
+| Dataset Size | Tier | CNN | RNN | Fusion | Transformer |
+|---|---|---|---|---|---|
+| 0–200 | tiny | ResNet18 | GRU | Standard FC | None |
+| 200–500 | very_small | MobileNetV2 | BiGRU | MLP | None |
+| 500–2000 | small | EfficientNetV2-B0 | BiLSTM | Deep Dense Fusion | None |
+| 2000–5000 | small_plus | EfficientNetV2-B0 | Stacked LSTM | Self-Attention Fusion | None |
+| 5000–15000 | medium | ConvNeXt | Encoder-Decoder LSTM | Cross-Modal Attention | ViT (optional) |
+| 15000+ | large | ConvNeXt | TCN | Multimodal Transformer Fusion | ViT |
 
 ---
 
@@ -107,52 +98,111 @@ See `docs/FINAL_YEAR_PROJECT_ARCHITECTURE.md` for the architecture explanation.
 git clone <repo-url>
 cd smart-tire-analyzer
 
-# One-command setup (creates venv, installs deps, creates dirs)
-python scripts/setup_env.py
+# Create virtual environment + install deps
+python -m venv .venv
+.venv\Scripts\activate     # Windows
+# source .venv/bin/activate  # Linux/Mac
+
+pip install -r backend/requirements.txt
+pip install -r ai_model/hybrid_torch/requirements.txt
 ```
 
-### 2. Configure API Keys
+### 2. Place Dataset
+
+Add tire images with labels to `dataset/splits/`:
+
+```
+dataset/splits/
+├── train/labels.csv      # Training set
+├── validation/labels.csv # Validation set
+└── test/labels.csv       # Test set
+```
+
+Each CSV must include `image_path`, `condition_id` (0=safe,1=moderate,2=replace), `wear_pattern`, and tread columns (`tread_1`–`tread_4`).
+
+### 3. Smart Training (Auto Model Selection)
 
 ```bash
-# Edit the generated .env file
-notepad .env       # Windows
-nano .env          # Linux/macOS
+# Full training with auto-config
+python scripts/train_smart.py
+
+# Analysis only (no training)
+python scripts/train_smart.py --analyze
 ```
 
-Add your API keys:
-```
-GEMINI_API_KEY=your_key_here
-GOOGLE_MAPS_API_KEY=your_key_here
-OPENWEATHER_API_KEY=your_key_here
-```
+The system will:
+- Count your samples and classify into a tier
+- Select optimal CNN + RNN + Fusion (and Transformer if enough data)
+- Train in two stages: frozen encoder (30 epochs) → fine-tune (25 epochs)
+- Apply class-weighted loss to handle imbalance
+- Save best checkpoint to `ai_model/saved_models/hybrid_torch/`
 
-### 3. Start Backend
+### 4. Start Backend
 
 ```bash
-# Development
 python scripts/start_server.py
-
-# Production
-python scripts/start_server.py --prod --workers 4
 ```
 
-**API is live at:** `http://localhost:8000`  
-**Swagger docs:** `http://localhost:8000/docs`
+**API:** `http://localhost:8000`  
+**Swagger:** `http://localhost:8000/docs`
 
-### 4. Test Inference
+### 5. Start Frontend (optional)
 
 ```bash
-# Analyze a tire image locally
+cd frontend
+npm install
+npm run dev
+```
+
+**Frontend:** `http://localhost:3000`  
+**Live Chat:** `http://localhost:3000/live-chat`  
+**Technical Support:** `http://localhost:3000/technical-support` (with Voice AI)
+
+### 6. Test Inference
+
+```bash
+# Analyze a tire image
 python scripts/infer.py --image path/to/tire.jpg
 
 # With GPS context
 python scripts/infer.py --image tire.jpg --lat 28.61 --lon 77.21
 ```
 
-### 5. Run Tests
+Or double-click `run_services.bat` and choose **Local Dev Mode**.
 
-```bash
-python scripts/run_tests.py
+---
+
+## Training Details
+
+### Loss Function
+
+Multi-task loss with class-weighted cross-entropy for imbalance:
+
+| Component | Weight | Notes |
+|-----------|:------:|-------|
+| Tread Depth L1 | 3.5 | Smooth L1 + extra penalty for >1mm error |
+| Health MSE | 0.7 | |
+| Remaining Life MSE | 0.7 | |
+| Wear Pattern CE | 1.0 | Inverse-frequency class weighted |
+| Condition CE | 1.0 | Inverse-frequency class weighted |
+
+Class weights are computed from the training set distribution (e.g., "replace" condition gets ~3.5× weight vs "safe").
+
+### Training Stages
+
+1. **Stage 1** (30 epochs): Frozen pretrained encoder, trains heads + fusion + RNN
+2. **Stage 2** (25 epochs): Fine-tune last 3 CNN blocks + all heads
+
+### Outputs
+
+```
+ai_model/saved_models/hybrid_torch/
+├── model_best.pt            # Best checkpoint (by tread MAE)
+├── model_last.pt            # Last checkpoint
+├── metadata.json            # Architecture + hyperparams + calibration
+├── metrics.json             # Validation/test metrics
+├── history.json             # Per-epoch training history
+└── tread_calibration.json   # Isotonic regression calibrator
 ```
 
 ---
@@ -160,10 +210,7 @@ python scripts/run_tests.py
 ## Docker Deployment
 
 ```bash
-# Build and start all services
 docker compose -f deployment/docker/docker-compose.yml up --build -d
-
-# Check health
 curl http://localhost:8000/health
 ```
 
@@ -173,18 +220,15 @@ curl http://localhost:8000/health
 
 ### `POST /analyze`
 
-Upload a tire image and receive a complete analysis report.
+Upload a tire image → analysis report.
 
-**Request:** `multipart/form-data`
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `image` | file | ✅ | JPEG/PNG, max 10MB |
 | `latitude` | float | ❌ | GPS for road context |
 | `longitude` | float | ❌ | GPS for road context |
 | `tire_brand` | string | ❌ | e.g. "Michelin" |
-| `mileage_km` | float | ❌ | Current vehicle mileage |
-
-**Response:** Full analysis JSON with risk level, predictions, reasoning, and alerts.
+| `mileage_km` | float | ❌ | Current mileage |
 
 ### `POST /feedback`
 
@@ -201,79 +245,11 @@ Submit user correction for continuous learning.
 
 ### `GET /history`
 
-Retrieve paginated analysis history.
-
-```
-GET /history?page=1&page_size=20&risk_level=HIGH
-```
+Paginated analysis history.
 
 ### `GET /health`
 
 Service health check.
-
----
-
-## Frontend (Next.js Web UI)
-
-The repository contains a Next.js web UI in the `frontend/` directory.
-
-- Install dependencies:
-       - `cd frontend`
-       - `npm install`
-- Development server:
-       - `npm run dev -- -p 8081`  # starts at http://localhost:8081
-- Production build:
-       - `npm run build`
-       - `npm start`    # serves the optimized build
-- Environment:
-       - Optional: set `NEXT_PUBLIC_API_BASE_URL` to point the UI to the backend API (default: `http://localhost:8000`).
-
-Notes:
-- The Next.js app uses Node/Next 16 and React 19; use `npm` (or `pnpm`/`yarn`) to install.
-- If you plan to run the frontend separately, ensure the backend API is accessible and any required API keys are set on the backend.
-
-Runs on: **Web (Chrome/Safari/Edge)** | **Windows** | **ChromeOS**
-
----
-
-## AI Training
-
-```bash
-# Fresh PyTorch hybrid training (EfficientNetV2-B0 + ViT-B/16 + BiLSTM + TCN + attention fusion)
-.\.venv\Scripts\python.exe scripts\prepare_and_train.py --fresh-hybrid --archive-old --full-train
-
-# Outputs
-# ai_model/saved_models/hybrid_torch/model_best.pt
-# ai_model/saved_models/hybrid_torch/metadata.json
-# ai_model/saved_models/hybrid_torch/metrics.json
-
-# Quick smoke run without archiving old artifacts
-.\.venv\Scripts\python.exe scripts\prepare_and_train.py --fresh-hybrid --hybrid-stage1-epochs 1 --hybrid-stage2-epochs 0
-```
-
----
-
-## Continuous Learning
-
-The self-correcting pipeline works automatically:
-
-1. Users submit corrections via `POST /feedback`
-2. Corrected image labels accumulate in `dataset/continuous_learning/labels.csv`
-3. After **10 trainable corrected samples**, hybrid retraining triggers automatically
-4. New model is gated by acceptance metrics before becoming the preferred runtime checkpoint
-5. Full versioning with rollback support in `continuous_learning/model_versions/`
-
----
-
-## Cross-Platform Support
-
-| Platform | Method | Status |
-|---|---|---|
-| Windows | Docker / `start_server.py` | ✅ |
-| Linux | Docker / `start_server.py` | ✅ |
-| macOS | Docker / `start_server.py` | ✅ |
-| Web | Next.js | ✅ |
-| ChromeOS | Next.js / Docker | ✅ |
 
 ---
 
@@ -282,47 +258,40 @@ The self-correcting pipeline works automatically:
 ```
 smart-tire-analyzer/
 ├── ai_model/
-│   ├── cnn/            # legacy CNN helpers + preprocessing + augmentation
-│   ├── transformer/    # Vision Transformer encoder
-│   ├── rnn/            # BiLSTM tread sequence analysis
-│   ├── ann/            # Fusion + multi-task prediction heads
-│   ├── training/       # Train loop, loss, optimizer, callbacks
-│   ├── evaluation/     # Metrics, confusion matrix, GradCAM
-│   └── optimization/   # TurboQuant: FP16, INT8, TFLite
+│   ├── models/            # 59 model implementations (CNN, RNN, Fusion)
+│   ├── hybrid_torch/      # Training pipeline, dataset, evaluation
+│   │   ├── trainer.py     # Multi-task training with class weighting
+│   │   ├── model.py       # Model architecture + checkpoint loading
+│   │   ├── dataset.py     # HybridTireDataset with tread sequences
+│   │   └── constants.py   # Labels, aliases, hyperparams
+│   ├── model_selector.py  # Auto-architecture recommender
+│   └── saved_models/      # Trained model checkpoints
 ├── backend/
 │   └── app/
-│       ├── routes/     # /analyze, /feedback, /history, /health
-│       ├── services/   # Inference, Gemini, Maps, Weather, Report
-│       ├── models/     # Pydantic request/response schemas
-│       └── database/   # SQLAlchemy models + CRUD
+│       ├── routes/        # /analyze, /feedback, /history, /health, /support
+│       ├── services/      # Inference, Gemini, Maps, Weather, Omnidim
+│       └── models/        # Pydantic schemas
 ├── frontend/
-│   └── src/
-│       ├── screens/    # HomeScreen, CameraScreen, ResultScreen
-│       ├── components/ # TireHealthGauge, WearPatternCard, RiskBadge
-│       ├── api/        # analyze.ts, feedback.ts, client.ts
-│       ├── store/      # Zustand: useAnalysisStore, useHistoryStore
-│       └── utils/      # imageHelpers, depthClassifier
-├── continuous_learning/
-│   ├── wrong_predictions/  # store_wrong.py
-│   ├── retraining/         # retrain_trigger, incremental_train, validation_check
-│   └── model_versions/     # version_manager.py
-├── api_integrations/
-│   ├── gemini/         # gemini_client, prompt_builder, response_parser
-│   ├── google_maps/    # maps_client, terrain_analyzer, traffic_fetcher
-│   └── weather/        # weather_client, risk_scorer
+│   └── app/
+│       ├── api/live-chat/ # Llama 3.3 tire-only AI assistant API
+│       ├── live-chat/     # Live Chat page
+│       ├── contact/       # Contact page
+│       ├── technical-support/ # Technical Support + Voice AI
+│       └── ...            # Other pages (home, documentation, etc.)
 ├── dataset/
-│   ├── images/         # Raw tire images
-│   ├── labels/         # CSV label files
-│   └── preprocessing/  # clean_dataset.py, split_dataset.py
-├── configs/            # model_config.yaml, training_config.yaml, api_config.yaml
+│   ├── splits/            # train/val/test CSVs with image paths
+│   ├── preprocessing/     # Pipeline: rotation, shadow, GrabCut, etc.
+│   └── raw/               # Raw tread images
+├── scripts/
+│   ├── train_smart.py     # Smart training entry point
+│   ├── start_server.py    # Backend API server
+│   ├── infer.py           # Local inference
+│   └── setup_env.py       # Environment setup
 ├── deployment/
-│   ├── docker/         # Dockerfile, docker-compose.yml
-│   ├── kubernetes/     # deployment.yaml, service.yaml, hpa.yaml
-│   └── ci_cd/          # GitHub Actions workflows
-├── scripts/            # setup_env.py, start_server.py, infer.py, run_tests.py
-├── tests/              # test_api.py
-├── .env.example        # API key template
-└── pyproject.toml
+│   └── docker/            # Dockerfile + compose
+├── debug_root.bat         # System diagnostics
+├── run_services.bat       # Interactive launcher (Windows)
+└── README.md
 ```
 
 ---

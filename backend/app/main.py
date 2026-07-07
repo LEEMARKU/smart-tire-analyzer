@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
-from app.routes import inference, feedback, health, history, enterprise, metrics, registry, auth, ws, video
+from app.routes import inference, feedback, health, history, enterprise, metrics, registry, auth, ws, video, omnidim
 from app.database.db import ensure_database_ready
 from app.services.cache_service import get_cache, init_cache
 from app.services.inference_service import InferenceService
@@ -270,6 +270,7 @@ def create_app() -> FastAPI:
     app.include_router(registry.router, prefix="/registry", tags=["Model Registry"])
     app.include_router(ws.router)
     app.include_router(video.router)
+    app.include_router(omnidim.router)
 
     # ─── Root endpoint ────────────────────────────────────────────────────────
     @app.get("/", tags=["Root"])

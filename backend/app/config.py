@@ -86,6 +86,8 @@ class AppSettings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"
     OLLAMA_MODEL: str = "llama3:8b"
 
+    OMNIDIM_API_KEY: str = ""
+
     GEMINI_DAILY_QUOTA: int = Field(default=50, ge=1)
     OPENWEATHER_DAILY_QUOTA: int = Field(default=50, ge=1)
     MAPS_DAILY_QUOTA: int = Field(default=50, ge=1)

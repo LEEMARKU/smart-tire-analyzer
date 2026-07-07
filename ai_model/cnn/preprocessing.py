@@ -11,7 +11,7 @@ Implements ALL 10 required preprocessing techniques in the correct order:
 import cv2
 import numpy as np
 import albumentations as A
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 import logging
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,52 @@ def detect_blur(image: np.ndarray, threshold: float = BLUR_THRESHOLD) -> Tuple[b
 # ---------------------------------------------------------------------------
 # Step 4 — Tire Detection & Cropping (Phase 2)
 # ---------------------------------------------------------------------------
-def detect_and_crop_tire(image: np.ndarray, padding: int = 10) -> np.ndarray:
+def grabcut_background_removal(
+    image: np.ndarray,
+    rect: Optional[Tuple[int, int, int, int]] = None,
+    mask_init: Optional[np.ndarray] = None,
+    iter_count: int = 5,
+) -> np.ndarray:
+    """
+    Remove background using GrabCut segmentation.
+    Produces a cleaner tire mask than Hough circle cropping alone.
+
+    Args:
+        image: BGR image
+        rect: (x, y, w, h) bounding rectangle for GrabCut initialization.
+              If None, uses the full image minus 10px border.
+        mask_init: Optional initial mask (GC_FGD/GC_BGD/GC_PR_FGD/GC_PR_BGD).
+                   If None, uses rect for initialization.
+        iter_count: Number of GrabCut iterations (5 is usually sufficient)
+
+    Returns:
+        BGR image with background set to black (pixels=0)
+    """
+    if rect is None:
+        h, w = image.shape[:2]
+        rect = (10, 10, w - 20, h - 20)
+
+    mask = np.zeros(image.shape[:2], np.uint8) if mask_init is None else mask_init.copy()
+    bgd_model = np.zeros((1, 65), np.float64)
+    fgd_model = np.zeros((1, 65), np.float64)
+
+    if mask_init is None:
+        cv2.grabCut(image, mask, rect, bgd_model, fgd_model, iter_count, cv2.GC_INIT_WITH_RECT)
+    else:
+        cv2.grabCut(image, mask, None, bgd_model, fgd_model, iter_count, cv2.GC_INIT_WITH_MASK)
+
+    foreground_mask = np.where((mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD), 1, 0).astype(np.uint8)
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    foreground_mask = cv2.morphologyEx(foreground_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    foreground_mask = cv2.morphologyEx(foreground_mask, cv2.MORPH_OPEN, kernel, iterations=1)
+
+    result = image.copy()
+    result[foreground_mask == 0] = 0
+    return result
+
+
+def detect_and_crop_tire(image: np.ndarray, padding: int = 10, use_grabcut: bool = True) -> np.ndarray:
     """
     Detect tire region using OpenCV Hough Circle Transform.
     Falls back to full image if no circle found.
@@ -100,9 +145,39 @@ def detect_and_crop_tire(image: np.ndarray, padding: int = 10) -> np.ndarray:
         y2 = min(h, cy + r + padding)
         cropped = image[y1:y2, x1:x2]
         logger.debug(f"Tire detected: center=({cx},{cy}), radius={r}")
+
+        if use_grabcut and cropped.shape[0] >= 50 and cropped.shape[1] >= 50:
+            refined = grabcut_background_removal(cropped, rect=(5, 5, cropped.shape[1] - 10, cropped.shape[0] - 10))
+            fg_mask = np.any(refined > 0, axis=-1)
+            if fg_mask.sum() > 0.1 * fg_mask.size:
+                cropped = refined
+
         return cropped
 
-    logger.warning("No tire circle detected — using full image")
+    # Fallback: contour-based detection + GrabCut
+    logger.warning("No tire circle detected — trying contour-based detection + GrabCut")
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if contours:
+        largest = max(contours, key=cv2.contourArea)
+        x, y, cw, ch = cv2.boundingRect(largest)
+        x1 = max(0, x - padding)
+        y1 = max(0, y - padding)
+        x2 = min(w, x + cw + padding)
+        y2 = min(h, y + ch + padding)
+        cropped = image[y1:y2, x1:x2]
+        if use_grabcut and cropped.shape[0] >= 50 and cropped.shape[1] >= 50:
+            mask_init = np.zeros(cropped.shape[:2], np.uint8)
+            mask_init[padding:-padding, padding:-padding] = cv2.GC_PR_FGD
+            refined = grabcut_background_removal(cropped, mask_init=mask_init)
+            fg_mask = np.any(refined > 0, axis=-1)
+            if fg_mask.sum() > 0.1 * fg_mask.size:
+                cropped = refined
+        return cropped
+
+    logger.warning("No tire region found — using full image")
     return image
 
 

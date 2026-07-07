@@ -10,7 +10,7 @@ type ClientChatMessage = {
   content: string
 }
 
-type LiveChatProvider = "gemini" | "openai-compatible" | "ollama"
+type LiveChatProvider = "gemini" | "openai-compatible" | "ollama" | "llama3"
 
 type ChatResult = {
   reply: string
@@ -62,13 +62,39 @@ const REQUEST_TIMEOUT_MS = Number(
     || "45000",
 )
 
-const SYSTEM_PROMPT = [
-  "You are Smart Tire Analyzer's live chat assistant.",
-  "Help users with tire analysis, tread depth, sidewall issues, account questions, pricing, and troubleshooting.",
-  "Keep answers concise, practical, and friendly.",
-  "Do not claim to access private account data or support tickets.",
-  "For safety-critical tire damage, low tread, bulges, punctures, or uncertain conditions, recommend a professional inspection and cautious driving.",
-].join(" ")
+const TIRE_ONLY_SYSTEM_PROMPT = `You are Smart Tire Analyzer's live chat assistant. You are an expert in tires, tire maintenance, tire analysis, and automotive safety.
+
+STRICT RULES - YOU MUST FOLLOW THESE:
+1. ONLY answer questions related to tires, tire maintenance, tire analysis, tread depth, tire wear patterns, tire damage, tire pressure, tire rotation, tire replacement, tire brands, tire sizing, tire safety, wheel alignment, wheel balancing, and automotive topics directly related to tires.
+2. If a user asks ANY question NOT related to tires, you MUST politely refuse and redirect them to tire-related topics.
+3. Do NOT answer general knowledge questions, programming questions, medical questions, legal questions, or any non-tire topics.
+4. Do NOT pretend to have capabilities outside of tire expertise.
+5. For safety-critical tire issues (bulges, sidewall damage, punctures, tread < 2mm), ALWAYS recommend immediate professional inspection and cautious driving.
+6. Keep answers concise, practical, and friendly.
+7. Do not claim to access private account data or support tickets.
+
+Examples of topics you CAN answer:
+- Tire tread depth analysis and measurement
+- Tire wear patterns (center wear, edge wear, cupping, feathering, etc.)
+- Tire damage identification (cracks, cuts, bulges, punctures, sidewall damage)
+- Tire pressure recommendations and maintenance
+- Tire rotation schedules and patterns
+- When to replace tires
+- Tire sizing and specifications
+- Wheel alignment and balancing related to tire wear
+- Tire safety and driving advice based on tire condition
+- Smart Tire Analyzer app features and usage
+
+Examples of topics you MUST refuse:
+- General conversation, weather, news, sports
+- Programming, coding, technical non-tire questions
+- Medical, legal, financial advice
+- Other automotive topics not directly related to tires (engine, transmission, brakes, etc.)
+- Personal questions, creative writing, homework help
+
+Response format for non-tire questions: "I'm a tire specialist assistant and can only help with tire-related questions. Could I assist you with something about your tires, such as tread depth, wear patterns, pressure, or tire safety?"`;
+
+const SYSTEM_PROMPT = TIRE_ONLY_SYSTEM_PROMPT;
 
 const RETRYABLE_PROVIDER_STATUSES = new Set([401, 403, 429, 500, 503])
 
@@ -188,6 +214,10 @@ function resolveProvider(): LiveChatProvider {
     || configuredProvider === "openrouter"
   ) {
     return "openai-compatible"
+  }
+
+  if (configuredProvider === "llama3" || configuredProvider === "llama3.3") {
+    return "llama3"
   }
 
   if (configuredProvider === "ollama") {
@@ -541,6 +571,52 @@ async function callOllama(messages: ClientChatMessage[]): Promise<ChatResult> {
   return tryBaseUrl(0)
 }
 
+async function callLlama33(messages: ClientChatMessage[]): Promise<ChatResult> {
+  const baseUrl = trimTrailingSlash(
+    process.env.LLAMA3_BASE_URL
+    || process.env.OLLAMA_BASE_URL
+    || process.env.OLLAMA_HOST
+    || "http://127.0.0.1:11434",
+  )
+  const model = process.env.LLAMA3_MODEL || "llama3.3:latest"
+
+  const payload = {
+    model,
+    stream: false,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      ...messages,
+    ],
+    options: {
+      temperature: 0.3,
+      top_p: 0.9,
+    },
+  }
+
+  const response = await postJson(
+    `${baseUrl}/api/chat`,
+    { "Content-Type": "application/json" },
+    payload,
+  )
+  const { data, text } = await readJsonResponse<OllamaResponse>(response)
+
+  if (!response.ok) {
+    throw new LiveChatError(
+      `Llama 3.3 returned ${response.status}. Make sure ${model} is available locally.`,
+      502,
+      text.slice(0, 500),
+    )
+  }
+
+  const reply = data?.message?.content?.trim()
+
+  if (!reply) {
+    throw new LiveChatError("Llama 3.3 did not return a chat response.", 502)
+  }
+
+  return { reply, model, provider: "llama3" }
+}
+
 async function getChatCompletion(messages: ClientChatMessage[]): Promise<ChatResult> {
   const provider = resolveProvider()
 
@@ -550,6 +626,10 @@ async function getChatCompletion(messages: ClientChatMessage[]): Promise<ChatRes
 
   if (provider === "openai-compatible") {
     return callOpenAiCompatible(messages)
+  }
+
+  if (provider === "llama3") {
+    return callLlama33(messages)
   }
 
   return callOllama(messages)

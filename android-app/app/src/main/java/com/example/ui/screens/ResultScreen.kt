@@ -38,6 +38,8 @@ import com.example.ui.components.TireDigitalTwin3D
 import com.example.ui.components.TelemetryTooltipDialog
 import com.example.util.PdfGenerator
 import com.example.viewmodel.TireTwinViewModel
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import com.example.viewmodel.TirePosition
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,6 +62,9 @@ fun ResultScreen(
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
     val activeTire by viewModel.activeTire.collectAsState()
     val useMetric by viewModel.useMetricUnits.collectAsState()
+    
+    val frontImageUri by viewModel.frontImageUri.collectAsState()
+    val sidewallImageUri by viewModel.sidewallImageUri.collectAsState()
 
     var tooltipToShow by remember { mutableStateOf<Pair<String, String>?>(null) }
 
@@ -565,6 +570,52 @@ fun ResultScreen(
                                     badgeColor = MaterialTheme.colorScheme.tertiary,
                                     icon = Icons.Default.CalendarToday
                                 )
+
+                                // 4. Visual Evidence Assets
+                                if (frontImageUri != null || sidewallImageUri != null) {
+                                    Text(
+                                        text = "VISUAL EVIDENCE LOG",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 1.sp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        ),
+                                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+                                    )
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(100.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        frontImageUri?.let {
+                                            AsyncImage(
+                                                model = it,
+                                                contentDescription = "Front Image",
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
+                                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                            )
+                                        }
+                                        sidewallImageUri?.let {
+                                            AsyncImage(
+                                                model = it,
+                                                contentDescription = "Sidewall Image",
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
+                                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                            )
+                                        }
+                                        if (frontImageUri == null || sidewallImageUri == null) {
+                                            Box(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
                             } else {
                                 Box(
                                     modifier = Modifier

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Header } from "@/components/header"
@@ -24,7 +24,9 @@ import {
     Camera,
     Wifi,
     Database,
-    Shield
+    Shield,
+    PhoneCall,
+    Mic,
 } from "lucide-react"
 import { supportTicketSchema, type SupportTicketInput } from "@/lib/validation"
 
@@ -77,6 +79,47 @@ export default function TechnicalSupportPage() {
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [isSubmitted, setIsSubmitted] = useState(false)
     const [ticketNumber, setTicketNumber] = useState<string | null>(null)
+    const [voiceAgentStatus, setVoiceAgentStatus] = useState<string>("checking")
+    const [voiceAgentName, setVoiceAgentName] = useState<string>("")
+    const [isInitializing, setIsInitializing] = useState(false)
+
+    useEffect(() => {
+        const checkVoiceAgent = async () => {
+            try {
+                const res = await fetch("http://localhost:8000/support/voice-agent")
+                const data = await res.json()
+                if (data.status === "active") {
+                    setVoiceAgentStatus("active")
+                    setVoiceAgentName(data.name || "Smart Tire Analyser Support")
+                } else if (data.status === "not_initialized") {
+                    setVoiceAgentStatus("ready")
+                } else {
+                    setVoiceAgentStatus("unavailable")
+                }
+            } catch {
+                setVoiceAgentStatus("unavailable")
+            }
+        }
+        checkVoiceAgent()
+    }, [])
+
+    const handleInitVoiceAgent = async () => {
+        setIsInitializing(true)
+        try {
+            const res = await fetch("http://localhost:8000/support/voice-agent/init", { method: "POST" })
+            const data = await res.json()
+            if (data.status === "active") {
+                setVoiceAgentStatus("active")
+                setVoiceAgentName(data.name || "Smart Tire Analyser Support")
+            } else {
+                setVoiceAgentStatus("error")
+            }
+        } catch {
+            setVoiceAgentStatus("error")
+        } finally {
+            setIsInitializing(false)
+        }
+    }
 
     const {
         register,
@@ -341,6 +384,50 @@ export default function TechnicalSupportPage() {
                                             <span className="font-medium text-foreground">Live Chat</span>
                                             <Badge variant="outline" className="border-green-500/50 text-green-600">Online</Badge>
                                         </a>
+                                        <div className="rounded-lg border border-border/50 p-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <PhoneCall className="h-4 w-4 text-primary" />
+                                                    <span className="font-medium text-foreground">Voice AI Support</span>
+                                                </div>
+                                                {voiceAgentStatus === "active" ? (
+                                                    <Badge variant="outline" className="border-green-500/50 text-green-600">
+                                                        <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-green-500" />
+                                                        Active
+                                                    </Badge>
+                                                ) : voiceAgentStatus === "checking" ? (
+                                                    <Badge variant="outline" className="text-muted-foreground">Checking...</Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-muted-foreground">
+                                                        {voiceAgentStatus === "ready" ? "Click to start" : "Unavailable"}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                Llama 3.3 70B-powered voice assistant for tire & technical support
+                                            </p>
+                                            {voiceAgentStatus === "active" ? (
+                                                <p className="mt-2 text-xs font-medium text-primary">
+                                                    {voiceAgentName} — Call via your OmniDimension dashboard
+                                                </p>
+                                            ) : voiceAgentStatus === "ready" || voiceAgentStatus === "unavailable" ? (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="mt-2 w-full gap-2"
+                                                    onClick={handleInitVoiceAgent}
+                                                    disabled={isInitializing}
+                                                >
+                                                    <Mic className="h-3.5 w-3.5" />
+                                                    {isInitializing ? "Starting Voice Agent..." : "Initialize Voice AI Agent"}
+                                                </Button>
+                                            ) : null}
+                                            {voiceAgentStatus === "error" && (
+                                                <p className="mt-2 text-xs text-destructive">
+                                                    Failed to initialize. Check OMNIDIM_API_KEY in .env
+                                                </p>
+                                            )}
+                                        </div>
                                     </CardContent>
                                 </Card>
                             </div>

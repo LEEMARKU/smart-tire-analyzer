@@ -1,220 +1,158 @@
-# 🚀 Quick Start Guide — API Key Rotation
+# Quick Start Guide
 
 ## 5-Minute Setup
 
-### 1️⃣ **Copy `.env` File**
+### 1. Setup Environment
+
 ```bash
-cp .env.example .env
+git clone <repo-url>
+cd smart-tire-analyzer
+
+# One-command: creates venv, installs deps, creates directories
+python scripts/setup_env.py
 ```
 
-✅ Your `.env` file now contains:
-- 6 Gemini API keys
-- 6 OpenWeatherMap keys
-- 1 Google Maps key
-- 1 Mapillary key
+### 2. Configure API Keys (Optional)
 
-### 2️⃣ **Start Backend**
 ```bash
-# Option A: Docker (Recommended)
-docker-compose up -d
-
-# Option B: Local Python
-python -m uvicorn backend.app.main:app --reload
+notepad .env       # Windows
+nano .env          # Linux/macOS
 ```
 
-### 3️⃣ **Verify Setup**
-```bash
-# Check API key status
-curl http://localhost:8000/health/api-keys | jq .
-
-# Should see something like:
-# {
-#   "status": "ok",
-#   "api_keys": {
-#     "gemini": {
-#       "total_keys": 6,
-#       "active_keys": 6,
-#       ...
-#     }
-#   }
-# }
+Add your API keys if you want external context features:
+```
+GEMINI_API_KEY=your_key_here
+GOOGLE_MAPS_API_KEY=your_key_here
+OPENWEATHER_API_KEY=your_key_here
 ```
 
-### 4️⃣ **Done!** 🎉
+### 3. Place Dataset
 
-Your system is now using API key rotation automatically!
+Put tire images in `dataset/raw/tread_images/` organized by condition class:
+
+```
+dataset/raw/tread_images/
+  safe/       # images of safe tires
+  moderate/   # images of moderately worn tires
+  replace/    # images of tires needing replacement
+```
+
+Then prepare labels:
+```bash
+python dataset/preprocessing/validate_images.py
+```
+
+### 4. Train Model (Auto-Config)
+
+```bash
+# Analyze dataset + train the best architecture automatically
+python scripts/train_smart.py
+
+# Or just see what it would recommend
+python scripts/train_smart.py --analyze
+```
+
+The system:
+- Counts your training samples
+- Selects optimal CNN + RNN + Fusion from 59 architectures
+- Trains in 2 stages: frozen encoder (30 epochs) then fine-tune (10 epochs)
+- Saves best model to `ai_model/saved_models/hybrid_torch/model_best.pt`
+
+### 5. Start Backend
+
+```bash
+python scripts/start_server.py
+```
+
+**API:** http://localhost:8000  
+**Docs:** http://localhost:8000/docs
+
+### 6. (Optional) Start Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open **http://localhost:3000** in your browser.
+Try **Live Chat** at `/live-chat` or **Technical Support** at `/technical-support`.
+
+### 7. Test Inference
+
+```bash
+python scripts/infer.py --image path/to/tire.jpg
+```
+
+Or double-click `run_services.bat` and select **Local Dev Mode**.
 
 ---
 
-## 📊 How It Works
+## Alternative: One-Click Launch
 
-When you make a tire analysis request:
-
-```
-Request comes in
-        ↓
-Choose which API (Gemini, Weather, Maps, etc.)
-        ↓
-Get current API key
-        ↓
-Make request
-        ↓
-Success? → Record usage & return result
-        ↓
-Failure/Quota? → Try next key automatically
-```
-
-**No code changes needed!** The rotation happens transparently.
+Double-click `run_services.bat` and select:
+- **1** — Local Dev Mode: train + start server interactively
+- **2** — Docker Deploy: full stack via Docker Compose
 
 ---
 
-## 🔍 Monitor Everything
+## Running on Your Own Dataset
 
-### Check Status
-```bash
-# Via CLI
-python scripts/manage_api_keys.py status
+The system adapts to any dataset size:
 
-# Via API
-curl http://localhost:8000/health/api-keys | jq '.api_keys'
-```
-
-### Check Specific API
-```bash
-python scripts/manage_api_keys.py status gemini
-```
-
-### Run Diagnostics
-```bash
-python scripts/manage_api_keys.py check
-```
+| Samples | Tier | Typical Architecture |
+|---------|------|-------------------|
+| 0–200 | tiny | ResNet18 + GRU + Standard FC |
+| 200–500 | very_small | MobileNetV2 + BiGRU + MLP |
+| 500–2000 | small | EfficientNetV2-B0 + BiLSTM + Deep Dense Fusion |
+| 2000–5000 | small_plus | EfficientNetV2-B0 + Stacked LSTM + Self-Attention Fusion |
+| 5000–15000 | medium | ConvNeXt + Encoder-Decoder LSTM + Cross-Modal Attention |
+| 15000+ | large | ConvNeXt + TCN + Multimodal Transformer Fusion |
 
 ---
 
-## 📈 Daily Capacity
+## Preprocessing Pipeline (24 Steps)
 
-| API | Keys | Per Key | Total/Day |
-|-----|------|---------|-----------|
-| Gemini | 6 | 50 req | **300 req** ⭐ |
-| Weather | 6 | 50 req | **300 req** ⭐ |
-| Maps | 1 | 50 req | 50 req |
-| Mapillary | 1 | 50 req | 50 req |
+All applied automatically during training and inference:
 
-**Can handle ~150-200 tire analyses per day**
-
----
-
-## ⚙️ Advanced: Adjust Quotas
-
-Edit `.env`:
-```bash
-# Increase Gemini quota to 100 requests/day per key
-GEMINI_DAILY_QUOTA=100
-
-# Increase Weather quota
-OPENWEATHER_DAILY_QUOTA=100
-```
-
-Then restart:
-```bash
-docker-compose restart backend
-```
+| Step | Technique | File |
+|------|-----------|------|
+| 1 | Auto rotation correction | `image_enhancement.py` |
+| 2 | Shadow removal (LAB) | `image_enhancement.py` |
+| 3 | Background removal (GrabCut) | `cnn/preprocessing.py` |
+| 4 | Bilateral filtering | `image_enhancement.py` |
+| 5 | Illumination correction | `image_enhancement.py` |
+| 6 | CLAHE contrast enhancement | `cnn/preprocessing.py` |
+| 7 | Sharpening | `cnn/preprocessing.py` |
+| 8 | Edge detection (4th channel) | `cnn/preprocessing.py` |
+| 9 | Resize (224x224) | `cnn/preprocessing.py` |
+| 10 | ImageNet normalization | `cnn/preprocessing.py` |
 
 ---
 
-## ➕ Advanced: Add More Keys
+## Troubleshooting
 
-1. Edit `.env`:
+### "No module found"
 ```bash
-# Add 2 more Gemini keys
-GEMINI_API_KEYS=key1,key2,key3,key4,key5,key6,key7,key8
+.venv\Scripts\python scripts\setup_env.py
 ```
 
-2. Restart backend:
+### Model not training
 ```bash
-docker-compose restart backend
+python scripts\train_smart.py --analyze
+# Checks dataset size and recommends architecture
 ```
 
-That's it! New keys are automatically integrated.
-
----
-
-## 🆘 Troubleshooting
-
-### ❌ "No API keys configured"
+### Backend won't start
 ```bash
-# Ensure .env exists
-ls -la .env
-
-# Ensure it has keys
-cat .env | grep GEMINI_API_KEYS
-```
-
-### ❌ "Rate limit exceeded"
-All keys are over quota. Options:
-```bash
-# Option 1: Add more keys to .env
-# Option 2: Wait until daily reset (midnight UTC)
-# Option 3: Increase quota in .env and restart
-```
-
-### ❌ Docker won't start
-```bash
-# Check .env exists in project root
-ls -la .env
-
-# Check logs
-docker-compose logs backend | tail -20
+python -c "import torch; print(torch.__version__)"
+# Ensure PyTorch is installed in your .venv
 ```
 
 ---
 
-## 📚 More Info
+## Next Steps
 
-- **Full Docs:** `docs/API_KEY_ROTATION.md`
-- **Implementation Details:** `IMPLEMENTATION_SUMMARY.md`
-- **Management Tool:** `python scripts/manage_api_keys.py --help`
-
----
-
-## 🎯 Key Features
-
-✅ **Automatic Rotation** — Switches keys when quota exceeded
-✅ **Error Handling** — Automatically tries next key on failure
-✅ **Real-time Monitoring** — Check status anytime
-✅ **No Code Changes** — Transparent to your code
-✅ **Production Ready** — Battle-tested reliability
-✅ **Backward Compatible** — Works with existing setup
-
----
-
-## 🔐 Security Checklist
-
-✅ `.env` file is in `.gitignore` (not committed)
-✅ API keys only in environment variables
-✅ Logs don't expose full API keys
-✅ Docker secrets compatible for production
-✅ Works with CI/CD systems
-
----
-
-## 📞 Need Help?
-
-1. Run diagnostics: `python scripts/manage_api_keys.py check`
-2. Check logs: `docker-compose logs backend`
-3. Check status: `curl http://localhost:8000/health/api-keys`
-4. Review docs: `docs/API_KEY_ROTATION.md`
-
----
-
-## ✨ That's It!
-
-Your API key rotation system is now live! 🎉
-
-The system will automatically:
-- ✅ Rotate keys when quota is reached
-- ✅ Handle failures gracefully
-- ✅ Track usage and provide status
-- ✅ Keep your service running 24/7
-
-**No manual intervention needed!**
+- See full **architecture docs**: `docs/ARCHITECTURE.md`
+- **Training guide**: `docs/training_guide.md`
+- **API reference**: `docs/api_reference.md`

@@ -1,11 +1,12 @@
 {
-  "generated_at": "2026-05-25T16:30:55.792326+00:00",
-  "model_version": "pytorch_hybrid:efficientnetv2_b0_vit_b16_bilstm_tcn_attention_calibrated",
+  "generated_at": "2026-06-29T23:48:00+00:00",
+  "model_version": "pytorch_hybrid:shufflenetv2_bilstm_gated_fusion",
+  "auto_configured": true,
   "architecture": {
-    "cnn": "EfficientNetV2-B0",
-    "transformer": "ViT-B/16",
-    "rnn": "BiLSTM + TCN",
-    "fusion": "Cross-Modal Attention + Deep Dense Fusion Network",
+    "cnn": "ShuffleNetV2 (dim=1280)",
+    "transformer": "disabled (not suitable for dataset size)",
+    "rnn": "BiLSTM (dim=128)",
+    "fusion": "Gated Fusion Network",
     "ann": "Multi-task Prediction Heads"
   },
   "condition_labels": [
@@ -26,14 +27,15 @@
     "validation": 163,
     "test": 162
   },
-  "tread_sequence_source": "runtime_visual_proxy",
-  "label_leakage_prevented": true,
-  "stage2_status": "completed",
-  "device": "cuda",
-  "best_validation_loss": 5.359706,
-  "best_validation_tread_mae_mm": 0.6802,
+  "tread_sequence_source": "labels",
+  "label_leakage_prevented": false,
+  "stage2_status": "partial (14/25)",
+  "device": "cpu",
+  "best_validation_loss": 15.9055,
+  "best_validation_tread_mae_mm": 1.50,
   "checkpoint": "ai_model\\saved_models\\hybrid_torch\\model_best.pt",
   "calibration": "ai_model\\saved_models\\hybrid_torch\\tread_calibration.json",
+  "export": "android-app/app/src/main/assets/model.onnx",
   "inference_strategy": {
     "test_time_augmentation": true,
     "symmetric_horizontal_flip": true,
@@ -46,8 +48,8 @@
   "acceptance": {
     "passed": false,
     "checks": {
-      "tread_mae_mm": true,
-      "avg_tread_mae_mm": true,
+      "tread_mae_mm": false,
+      "avg_tread_mae_mm": false,
       "tread_within_1mm": false
     },
     "thresholds": {

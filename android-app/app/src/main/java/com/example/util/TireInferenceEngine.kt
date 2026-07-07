@@ -1,5 +1,8 @@
 package com.example.util
 
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -11,67 +14,127 @@ import androidx.camera.core.ImageProxy
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import org.tensorflow.lite.Interpreter
+import java.nio.FloatBuffer
 
 data class TireInferenceResult(
     val condition: String,
     val conditionConfidence: Float,
     val health: Float,
-    val remainingLife: Float
+    val remainingLife: Float,
+    val inferenceTimeMs: Long = 0L,
 )
 
 class TireInferenceEngine(private val context: Context) {
 
-    private var interpreter: Interpreter? = null
+    private var ortEnv: OrtEnvironment? = null
+    private var ortSession: OrtSession? = null
     private var isLoaded = false
+    private var currentConfig: InferenceConfig? = null
 
-    private val imageSize = 224
     private val labels = arrayOf("safe", "moderate", "replace")
 
-    fun loadModel(modelName: String = "model_fp16.tflite") {
-        if (isLoaded) return
-        val modelBuffer = org.tensorflow.lite.support.common.FileUtil.loadMappedFile(context, modelName)
-        val options = Interpreter.Options().apply { setNumThreads(4) }
-        interpreter = Interpreter(modelBuffer, options)
+    fun loadWithSelection(trainCount: Int = 0, preferAccuracy: Boolean = false) {
+        val result = ModelSelector.select(context, trainCount, preferAccuracy)
+        val config = ModelSelector.getInferenceConfig(result)
+        loadWithConfig(config)
+    }
+
+    fun loadWithConfig(config: InferenceConfig) {
+        if (isLoaded && currentConfig == config) return
+        close()
+
+        val modelBytes = context.assets.open(config.modelFileName).readBytes()
+        ortEnv = OrtEnvironment.getEnvironment()
+        val options = OrtSession.SessionOptions().apply {
+            // setNumThreads is not available in session options this way in some ORT versions
+            // or might be setIntraOpNumThreads
+            setIntraOpNumThreads(config.numThreads)
+            try {
+                addNnapi()
+            } catch (_: Exception) {}
+        }
+        ortSession = ortEnv!!.createSession(modelBytes, options)
+        currentConfig = config
         isLoaded = true
     }
 
+    fun loadModel(modelName: String = "model.onnx") {
+        if (isLoaded) return
+        val config = InferenceConfig(
+            modelFileName = modelName,
+            numThreads = 4,
+            useGpu = false,
+            useNnapi = false,
+        )
+        loadWithConfig(config)
+    }
+
     fun infer(bitmap: Bitmap): TireInferenceResult {
-        val interpreter = interpreter ?: throw IllegalStateException("Model not loaded")
+        val env = ortEnv ?: throw IllegalStateException("ONNX Runtime not initialized")
+        val session = ortSession ?: throw IllegalStateException("Model not loaded")
+        val inputSize = currentConfig?.inputSize ?: 224
 
-        val resized = Bitmap.createScaledBitmap(bitmap, imageSize, imageSize, true)
+        val startTime = System.currentTimeMillis()
 
-        val inputBuffer = ByteBuffer.allocateDirect(4 * imageSize * imageSize * 3)
-        inputBuffer.order(ByteOrder.nativeOrder())
-        val pixels = IntArray(imageSize * imageSize)
-        resized.getPixels(pixels, 0, imageSize, 0, 0, imageSize, imageSize)
-        for (pixel in pixels) {
-            inputBuffer.putFloat(((pixel shr 16) and 0xFF).toFloat())
-            inputBuffer.putFloat(((pixel shr 8) and 0xFF).toFloat())
-            inputBuffer.putFloat((pixel and 0xFF).toFloat())
+        val resized = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true)
+        val pixels = IntArray(inputSize * inputSize)
+        resized.getPixels(pixels, 0, inputSize, 0, 0, inputSize, inputSize)
+
+        val mean = 127.5f
+        val std = 127.5f
+
+        val imageData = FloatArray(3 * inputSize * inputSize)
+        for (i in pixels.indices) {
+            val pixel = pixels[i]
+            val r = ((pixel shr 16) and 0xFF).toFloat()
+            val g = ((pixel shr 8) and 0xFF).toFloat()
+            val b = (pixel and 0xFF).toFloat()
+            imageData[i] = (r - mean) / std                              // R channel
+            imageData[inputSize * inputSize + i] = (g - mean) / std      // G channel
+            imageData[2 * inputSize * inputSize + i] = (b - mean) / std  // B channel
         }
 
-        val outputCondition = Array(1) { FloatArray(3) }
-        val outputHealth = Array(1) { FloatArray(1) }
-        val outputLife = Array(1) { FloatArray(1) }
+        val imageShape = longArrayOf(1L, 3L, inputSize.toLong(), inputSize.toLong())
+        val imageTensor = OnnxTensor.createTensor(env, FloatBuffer.wrap(imageData), imageShape)
 
-        interpreter.runForMultipleInputsOutputs(
-            arrayOf(inputBuffer),
-            mapOf(
-                0 to outputHealth,
-                1 to outputCondition,
-                2 to outputLife
-            )
+        val treadData = FloatArray(4 * 7)
+        val treadShape = longArrayOf(1L, 4L, 7L)
+        val treadTensor = OnnxTensor.createTensor(env, FloatBuffer.wrap(treadData), treadShape)
+
+        val inputs = mapOf(
+            "image" to imageTensor,
+            "tread_sequence" to treadTensor,
         )
 
-        val probs = outputCondition[0]
-        val conditionIdx = probs.indices.maxByOrNull { probs[it] } ?: 0
+        val results = session.run(inputs)
+
+        val conditionTensor = results.get("condition").get() as OnnxTensor
+        val conditionBuffer = FloatBuffer.allocate(3)
+        conditionTensor.floatBuffer.rewind()
+        conditionTensor.floatBuffer.get(conditionBuffer.array(), 0, 3)
+
+        val conditionIdx = (0 until 3).maxByOrNull { conditionBuffer.array()[it] } ?: 0
+
+        val healthTensor = results.get("health_score").get() as OnnxTensor
+        healthTensor.floatBuffer.rewind()
+        val healthScore = healthTensor.floatBuffer.get()
+
+        val lifeTensor = results.get("remaining_life").get() as OnnxTensor
+        lifeTensor.floatBuffer.rewind()
+        val remainingLife = lifeTensor.floatBuffer.get()
+
+        imageTensor.close()
+        treadTensor.close()
+        results.close()
+
+        val inferenceTime = System.currentTimeMillis() - startTime
 
         return TireInferenceResult(
             condition = labels[conditionIdx],
-            conditionConfidence = probs[conditionIdx],
-            health = outputHealth[0][0],
-            remainingLife = outputLife[0][0]
+            conditionConfidence = conditionBuffer.array()[conditionIdx],
+            health = healthScore,
+            remainingLife = remainingLife,
+            inferenceTimeMs = inferenceTime,
         )
     }
 
@@ -117,9 +180,24 @@ class TireInferenceEngine(private val context: Context) {
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 
-    fun close() {
-        interpreter?.close()
-        interpreter = null
-        isLoaded = false
+    fun getModelInfo(): String {
+        val config = currentConfig
+        if (config == null) return "No model loaded"
+        return buildString {
+            appendLine("Model: ${config.modelFileName}")
+            appendLine("Threads: ${config.numThreads}")
+            appendLine("GPU: ${config.useGpu}")
+            appendLine("NNAPI: ${config.useNnapi}")
+            appendLine("Input size: ${config.inputSize}x${config.inputSize}")
+        }
     }
+
+    fun close() {
+        ortSession?.close()
+        ortSession = null
+        isLoaded = false
+        currentConfig = null
+    }
+
+    fun isModelLoaded(): Boolean = isLoaded
 }

@@ -1,31 +1,31 @@
 {
   "validation": {
-    "loss": 5.359706,
-    "condition_accuracy": 0.6994,
-    "wear_accuracy": 0.5031,
-    "tread_mae_mm": 0.6802,
-    "avg_tread_mae_mm": 0.6521,
-    "tread_within_1mm": 0.7377,
-    "health_mae": 1.1274,
-    "remaining_life_mae_km": 9722.6,
+    "loss": 14.666627,
+    "condition_accuracy": 0.9571,
+    "wear_accuracy": 0.5337,
+    "tread_mae_mm": 1.2814,
+    "avg_tread_mae_mm": 1.2361,
+    "tread_within_1mm": 0.4647,
+    "health_mae": 0.4652,
+    "remaining_life_mae_km": 3994.04,
     "samples": 163
   },
   "test": {
-    "loss": 7.879227,
-    "condition_accuracy": 0.7469,
-    "wear_accuracy": 0.5432,
-    "tread_mae_mm": 0.8876,
-    "avg_tread_mae_mm": 0.8642,
-    "tread_within_1mm": 0.6127,
-    "health_mae": 1.1026,
-    "remaining_life_mae_km": 11298.23,
+    "loss": 18.597749,
+    "condition_accuracy": 0.9074,
+    "wear_accuracy": 0.6173,
+    "tread_mae_mm": 1.5489,
+    "avg_tread_mae_mm": 1.5123,
+    "tread_within_1mm": 0.3565,
+    "health_mae": 0.4333,
+    "remaining_life_mae_km": 3963.9,
     "samples": 162
   },
   "acceptance": {
     "passed": false,
     "checks": {
-      "tread_mae_mm": true,
-      "avg_tread_mae_mm": true,
+      "tread_mae_mm": false,
+      "avg_tread_mae_mm": false,
       "tread_within_1mm": false
     },
     "thresholds": {

@@ -2,6 +2,7 @@ package com.example.viewmodel
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
@@ -87,7 +88,21 @@ class TireTwinViewModel(application: Application) : AndroidViewModel(application
     // Authentication state
     val isLoggedIn = MutableStateFlow(false)
     val userEmail = MutableStateFlow("")
-    
+
+    private val _frontImageUri = MutableStateFlow<Uri?>(null)
+    val frontImageUri: StateFlow<Uri?> = _frontImageUri.asStateFlow()
+
+    private val _sidewallImageUri = MutableStateFlow<Uri?>(null)
+    val sidewallImageUri: StateFlow<Uri?> = _sidewallImageUri.asStateFlow()
+
+    fun setFrontImageUri(uri: Uri?) {
+        _frontImageUri.value = uri
+    }
+
+    fun setSidewallImageUri(uri: Uri?) {
+        _sidewallImageUri.value = uri
+    }
+
     // Notification states
     private val _notifications = MutableStateFlow<List<String>>(emptyList())
     val notifications: StateFlow<List<String>> = _notifications.asStateFlow()
@@ -119,7 +134,7 @@ class TireTwinViewModel(application: Application) : AndroidViewModel(application
     private val _isAnalyzing = MutableStateFlow(false)
     val isAnalyzing: StateFlow<Boolean> = _isAnalyzing.asStateFlow()
 
-    // TFLite offline inference
+    // ONNX Runtime offline inference
     val tireInferenceEngine = TireInferenceEngine(application)
     private val _tireInferenceResult = MutableStateFlow<TireInferenceResult?>(null)
     val tireInferenceResult: StateFlow<TireInferenceResult?> = _tireInferenceResult.asStateFlow()
@@ -130,7 +145,7 @@ class TireTwinViewModel(application: Application) : AndroidViewModel(application
             val result = tireInferenceEngine.infer(bitmap)
             _tireInferenceResult.value = result
             _analysisState.value = GeminiAnalysis(
-                analysis = "TFLite condition: ${result.condition} (${"%.0f".format(result.conditionConfidence * 100)}% confidence), health index: ${"%.0f".format(result.health * 100)}%, remaining life: ${"%.0f".format(result.remainingLife * 100)}%",
+                analysis = "AI condition: ${result.condition} (${"%.0f".format(result.conditionConfidence * 100)}% confidence), health index: ${"%.0f".format(result.health * 100)}%, remaining life: ${"%.0f".format(result.remainingLife * 100)}%",
                 safety = when (result.condition) {
                     "safe" -> "Low risk — tire is in good condition."
                     "moderate" -> "Medium risk — monitor tread wear and schedule inspection."
@@ -141,7 +156,7 @@ class TireTwinViewModel(application: Application) : AndroidViewModel(application
                     "moderate" -> "Schedule inspection within 30 days."
                     else -> "Replace tire immediately."
                 },
-                remainingLifePrediction = "TFLite AI predicts ${"%.0f".format(result.remainingLife * 100)}% tread life remaining"
+                remainingLifePrediction = "AI predicts ${"%.0f".format(result.remainingLife * 100)}% tread life remaining"
             )
             _isAnalyzing.value = false
             syncActiveTireToMap()

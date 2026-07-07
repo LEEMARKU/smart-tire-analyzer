@@ -41,6 +41,7 @@ import com.example.ui.components.TireDigitalTwin3D
 import com.example.ui.components.TelemetryControlPanel
 import com.example.ui.components.DiagnosticPanel
 import com.example.ui.components.TelemetryTooltipDialog
+import com.example.ui.components.AssetUploadSection
 import com.example.util.PdfGenerator
 import com.example.util.SnapshotHelper
 import com.example.viewmodel.TireTwinViewModel
@@ -805,6 +806,11 @@ fun HomeScreen(
             }
 
             // Real-time AI Degradation Prognosis card with frosted glass theme
+            AssetUploadSection(
+                viewModel = viewModel,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+            )
+
             DiagnosticPanel(
                 speed = speed,
                 pressure = pressure,

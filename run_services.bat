@@ -2,9 +2,10 @@
 REM ============================================================================
 REM Smart Tire Analyzer — AUTO DEPLOY
 REM Double-click this script to automatically build & deploy the full stack:
-REM   1. Docker Desktop (docker-compose: backend + frontend + redis + nginx)
-REM   2. Kubernetes     (kubectl apply: backend + frontend deployments)
-REM   3. Health check   (verify all services respond)
+REM   1. Local Python development (train + server without Docker)
+REM   2. Docker Desktop (docker-compose: backend + frontend + redis + nginx)
+REM   3. Kubernetes     (kubectl apply: backend + frontend deployments)
+REM   4. Health check   (verify all services respond)
 REM ============================================================================
 
 setlocal enabledelayedexpansion
@@ -21,17 +22,196 @@ set "SKIP_K8S=0"
 
 title Smart Tire Analyzer — Auto Deploy
 
+:MENU
 cls
 echo.
 echo  ============================================================
-echo       SMART TIRE ANALYZER — AUTO DEPLOY
+echo       SMART TIRE ANALYZER — LAUNCH MENU
+echo  ============================================================
+echo.
+echo  1. LOCAL DEV MODE (no Docker required)
+echo     - Analyze dataset and train model
+echo     - Start backend API
+echo     - Open dashboard
+echo.
+echo  2. FRONTEND DEV SERVER
+echo     - Start Next.js frontend at http://localhost:3000
+echo.
+echo  3. DOCKER DEPLOY (Docker Desktop required)
+echo     - Build and start all containers
+echo     - backend + frontend + redis + nginx
+echo.
+echo  4. EXIT
+echo.
+echo  ------------------------------------------------------------
+echo.
+set /p "CHOICE=Select option (1-4): "
+if "%CHOICE%"=="1" goto LOCAL_DEV
+if "%CHOICE%"=="2" goto FRONTEND_DEV
+if "%CHOICE%"=="3" goto DOCKER_DEPLOY
+if "%CHOICE%"=="4" exit /b 0
+goto MENU
+
+REM ============================================================================
+REM LOCAL DEV MODE
+REM ============================================================================
+:LOCAL_DEV
+cls
+echo.
+echo  ============================================================
+echo       LOCAL DEV MODE
+echo  ============================================================
+echo.
+echo  This will guide you through:
+echo    1. Verify Python environment
+echo    2. Analyze dataset and train model
+echo    3. Start backend API server
+echo.
+echo  ------------------------------------------------------------
+echo.
+
+REM Check Python
+python --version >nul 2>&1
+if !ERRORLEVEL! NEQ 0 (
+    echo  [FAIL] Python not found. Install Python 3.10+ first.
+    pause
+    goto MENU
+)
+echo  [OK]   Python found.
+
+REM Check .env
+if not exist "%REPO_ROOT%\.env" (
+    if exist "%REPO_ROOT%\.env.example" (
+        copy /Y "%REPO_ROOT%\.env.example" "%REPO_ROOT%\.env" >nul
+        echo  [OK]   Created .env from .env.example.
+    )
+)
+
+echo.
+echo  [Step 1] Analyze dataset and train model?
+echo  This will auto-select the best architecture for your dataset.
+echo.
+set /p "TRAIN=Run smart training? (Y/N): "
+if /i "!TRAIN!"=="Y" (
+    echo.
+    echo  Starting smart training...
+    echo  (This may take 30-60 minutes)
+    echo.
+    cd /d "%REPO_ROOT%"
+    python scripts\train_smart.py
+    if !ERRORLEVEL! NEQ 0 (
+        echo  [FAIL] Training failed.
+        pause
+        goto MENU
+    )
+    echo  [OK]   Training complete.
+) else (
+    echo  Skipping training.
+    if not exist "%REPO_ROOT%\ai_model\saved_models\hybrid_torch\model_best.pt" (
+        echo  [WARN] No trained model found. Run training first.
+    )
+)
+
+echo.
+echo  [Step 2] Start backend API server?
+echo.
+set /p "START=Start server? (Y/N): "
+if /i "!START!"=="Y" (
+    echo.
+    echo  Starting backend on http://localhost:8000
+    echo  API docs at http://localhost:8000/docs
+    echo.
+    start "Smart Tire Backend" cmd /c "cd /d "%REPO_ROOT%\backend" && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    echo  [OK]   Backend started in a new window.
+    timeout /t 3 /nobreak >nul
+    start http://localhost:8000/docs
+)
+
+echo.
+echo  ------------------------------------------------------------
+echo   LOCAL DEV MODE COMPLETE
+echo  ------------------------------------------------------------
+echo.
+echo  Backend:  http://localhost:8000
+echo  API Docs: http://localhost:8000/docs
+echo  Frontend: http://localhost:3000 (run option 2 to start)
+echo.
+echo  New Features:
+echo  - Live Chat:      /live-chat  (tire-only Llama 3.3 AI assistant)
+echo  - Voice AI:       /technical-support (OmniDimension voice agent)
+echo  - Contact:        /contact
+echo.
+echo  To analyze a tire image:
+echo    python scripts\infer.py --image path\to\image.jpg
+echo.
+pause
+goto MENU
+
+REM ============================================================================
+REM FRONTEND DEV SERVER
+REM ============================================================================
+:FRONTEND_DEV
+cls
+echo.
+echo  ============================================================
+echo       FRONTEND DEV SERVER
+echo  ============================================================
+echo.
+echo  Starting Next.js frontend on http://localhost:3000
+echo.
+
+REM Check Node.js
+where node >nul 2>&1
+if !ERRORLEVEL! NEQ 0 (
+    echo  [FAIL] Node.js not found. Install Node.js 18+ first.
+    pause
+    goto MENU
+)
+echo  [OK]   Node.js found.
+
+REM Check if node_modules exists
+if not exist "%REPO_ROOT%\frontend\node_modules" (
+    echo  [INFO] Installing frontend dependencies...
+    cd /d "%REPO_ROOT%\frontend"
+    npm install
+    if !ERRORLEVEL! NEQ 0 (
+        echo  [FAIL] npm install failed.
+        pause
+        goto MENU
+    )
+    echo  [OK]   Dependencies installed.
+)
+
+cd /d "%REPO_ROOT%\frontend"
+echo  Starting Next.js dev server...
+start "Smart Tire Frontend" cmd /c "cd /d "%REPO_ROOT%\frontend" && npx next dev -p 3000"
+echo  [OK]   Frontend started in a new window.
+timeout /t 3 /nobreak >nul
+start http://localhost:3000
+echo.
+echo  Frontend URL:     http://localhost:3000
+echo  Live Chat:        http://localhost:3000/live-chat
+echo  Technical Support: http://localhost:3000/technical-support
+echo  Contact:          http://localhost:3000/contact
+echo.
+pause
+goto MENU
+
+REM ============================================================================
+REM DOCKER DEPLOY MODE
+REM ============================================================================
+:DOCKER_DEPLOY
+cls
+echo.
+echo  ============================================================
+echo       SMART TIRE ANALYZER — DOCKER DEPLOY
 echo  ============================================================
 echo.
 echo  This script will automatically:
 echo    1. Check prerequisites (Docker Desktop, kubectl)
 echo    2. Build Docker images for backend ^& frontend
 echo    3. Deploy full stack via Docker Compose
-echo    4. Deploy to Kubernetes
+echo    4. Deploy to Kubernetes (optional)
 echo    5. Verify all services are healthy
 echo.
 echo  Press Ctrl+C at any time to abort.

@@ -1,0 +1,25 @@
+{
+  "models": [
+    {
+      "name": "model.onnx",
+      "type": "ONNX",
+      "description": "ONNX Runtime (primary)"
+    },
+    {
+      "name": "model_latest.tflite",
+      "type": "FP32",
+      "description": "Full precision"
+    },
+    {
+      "name": "model_fp16.tflite",
+      "type": "FP16",
+      "description": "Half precision (balanced)"
+    },
+    {
+      "name": "model_int8.tflite",
+      "type": "INT8",
+      "description": "Quantized (fastest)"
+    }
+  ],
+  "recommended": "model.onnx"
+}

@@ -80,7 +80,7 @@ fun CameraScreen(
 
     // Scanner configuration
 
-    suspend fun runTfliteInference(bitmap: android.graphics.Bitmap) {
+    suspend fun runOnnxInference(bitmap: android.graphics.Bitmap) {
         viewModel.runTireInference(bitmap)
 
         activeLogText = "Synthesizing results..."
@@ -125,10 +125,10 @@ fun CameraScreen(
                             return@launch
                         }
 
-                        activeLogText = "Running TFLite inference..."
+                        activeLogText = "Running ONNX inference..."
                         scanProgress = 0.6f
 
-                        runTfliteInference(bitmap)
+                        runOnnxInference(bitmap)
                     }
                 }
 

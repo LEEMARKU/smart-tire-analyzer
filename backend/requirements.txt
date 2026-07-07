@@ -66,3 +66,6 @@ httpx==0.27.0                    # For TestClient
 
 # ── WebSockets ────────────────────────────────────────────────────────────
 websockets>=12.0
+
+# ── Voice AI (OmniDimension) ──────────────────────────────────────────────
+omnidimension>=0.2.17

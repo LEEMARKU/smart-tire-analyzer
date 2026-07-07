@@ -201,13 +201,18 @@ class BiLSTMTCNBranch(nn.Module):
 
 
 class DeepDenseFusion(nn.Module):
-    """Deep dense fusion network with cross-modal attention over feature tokens."""
+    """Deep dense fusion network with cross-modal attention over feature tokens.
+    Supports 2 modalities (CNN + RNN) or 3 modalities (CNN + ViT + RNN).
+    """
 
-    def __init__(self, output_dim: int = 512) -> None:
+    def __init__(self, cnn_dim: int = 512, vit_dim: int = 512, rnn_dim: int = 256, output_dim: int = 512, use_vit: bool = True) -> None:
         super().__init__()
-        self.cnn_proj = nn.Linear(512, output_dim)
-        self.vit_proj = nn.Linear(512, output_dim)
-        self.rnn_proj = nn.Linear(256, output_dim)
+        self.use_vit = use_vit
+        self.cnn_proj = nn.Linear(cnn_dim, output_dim)
+        self.rnn_proj = nn.Linear(rnn_dim, output_dim)
+        num_modalities = 3 if use_vit else 2
+        if use_vit:
+            self.vit_proj = nn.Linear(vit_dim, output_dim)
         self.cross_attention = nn.MultiheadAttention(
             embed_dim=output_dim,
             num_heads=8,
@@ -216,13 +221,13 @@ class DeepDenseFusion(nn.Module):
         )
         self.attention_norm = nn.LayerNorm(output_dim)
         self.gate = nn.Sequential(
-            nn.Linear(output_dim * 3, output_dim),
+            nn.Linear(output_dim * num_modalities, output_dim),
             nn.ReLU(inplace=True),
-            nn.Linear(output_dim, 3),
+            nn.Linear(output_dim, num_modalities),
             nn.Softmax(dim=1),
         )
         self.fusion = nn.Sequential(
-            nn.Linear(output_dim * 4, 1024),
+            nn.Linear(output_dim * (num_modalities + 1), 1024),
             nn.ReLU(inplace=True),
             nn.LayerNorm(1024),
             nn.Dropout(0.4),
@@ -232,8 +237,10 @@ class DeepDenseFusion(nn.Module):
             nn.Dropout(0.4),
         )
 
-    def forward(self, cnn: torch.Tensor, vit: torch.Tensor, rnn: torch.Tensor) -> torch.Tensor:
-        projected = [self.cnn_proj(cnn), self.vit_proj(vit), self.rnn_proj(rnn)]
+    def forward(self, cnn: torch.Tensor, vit: torch.Tensor | None, rnn: torch.Tensor) -> torch.Tensor:
+        projected = [self.cnn_proj(cnn), self.rnn_proj(rnn)]
+        if self.use_vit and vit is not None:
+            projected.insert(1, self.vit_proj(vit))
         tokens = torch.stack(projected, dim=1)
         attended, _ = self.cross_attention(tokens, tokens, tokens, need_weights=False)
         attended = self.attention_norm(tokens + attended)
@@ -246,14 +253,26 @@ class DeepDenseFusion(nn.Module):
 
 
 class HybridTireModel(nn.Module):
-    """Fresh multitask PyTorch hybrid tire model."""
+    """Fresh multitask PyTorch hybrid tire model.
+    
+    When use_vit=False, the ViT branch is skipped entirely, reducing total
+    parameters from ~94M to ~8M — better for small datasets.
+    """
 
-    def __init__(self, pretrained: bool = True) -> None:
+    def __init__(self, pretrained: bool = True, use_vit: bool = True, cnn_feature_dim: int = 512, rnn_output_dim: int = 256, fusion_output_dim: int = 512) -> None:
         super().__init__()
-        self.cnn = EfficientNetV2B0Branch(pretrained=pretrained)
-        self.vit = ViTB16Branch(pretrained=pretrained)
-        self.rnn = BiLSTMTCNBranch()
-        self.fusion = DeepDenseFusion()
+        self.use_vit = use_vit
+        self.cnn = EfficientNetV2B0Branch(pretrained=pretrained, feature_dim=cnn_feature_dim)
+        if use_vit:
+            self.vit = ViTB16Branch(pretrained=pretrained, feature_dim=cnn_feature_dim)
+        self.rnn = BiLSTMTCNBranch(output_dim=rnn_output_dim)
+        self.fusion = DeepDenseFusion(
+            cnn_dim=cnn_feature_dim,
+            vit_dim=cnn_feature_dim if use_vit else 0,
+            rnn_dim=rnn_output_dim,
+            output_dim=fusion_output_dim,
+            use_vit=use_vit,
+        )
         self.loss_log_vars = nn.ParameterDict(
             {
                 "tread": nn.Parameter(torch.zeros(())),
@@ -263,50 +282,54 @@ class HybridTireModel(nn.Module):
                 "condition": nn.Parameter(torch.zeros(())),
             }
         )
+        vision_fused_dim = cnn_feature_dim + (cnn_feature_dim if use_vit else 0)
         self.tread_head = nn.Sequential(
-            nn.Linear(1024, 256),
+            nn.Linear(vision_fused_dim, 256),
             nn.ReLU(inplace=True),
             nn.Dropout(0.3),
             nn.Linear(256, 4),
             nn.Sigmoid(),
         )
         self.health_head = nn.Sequential(
-            nn.Linear(512, 128),
+            nn.Linear(fusion_output_dim, 128),
             nn.ReLU(inplace=True),
             nn.Dropout(0.4),
             nn.Linear(128, 1),
             nn.Sigmoid(),
         )
         self.life_head = nn.Sequential(
-            nn.Linear(512, 128),
+            nn.Linear(fusion_output_dim, 128),
             nn.ReLU(inplace=True),
             nn.Dropout(0.4),
             nn.Linear(128, 1),
             nn.Sigmoid(),
         )
         self.wear_head = nn.Sequential(
-            nn.Linear(512, 256),
+            nn.Linear(fusion_output_dim, 256),
             nn.ReLU(inplace=True),
             nn.Dropout(0.4),
             nn.Linear(256, len(WEAR_LABELS)),
         )
         self.condition_head = nn.Sequential(
-            nn.Linear(512, 128),
+            nn.Linear(fusion_output_dim, 128),
             nn.ReLU(inplace=True),
             nn.Dropout(0.4),
             nn.Linear(128, len(CONDITION_LABELS)),
         )
 
     def set_encoder_trainable(self, trainable: bool) -> None:
-        for branch in (self.cnn.encoder, self.vit.encoder):
-            for parameter in branch.parameters():
+        for parameter in self.cnn.encoder.parameters():
+            parameter.requires_grad = trainable
+        if self.use_vit:
+            for parameter in self.vit.encoder.parameters():
                 parameter.requires_grad = trainable
 
     def unfreeze_last_blocks(self) -> None:
         self.set_encoder_trainable(False)
         self.cnn.unfreeze_last_blocks()
-        for parameter in self.vit.encoder.encoder.layers[-4:].parameters():
-            parameter.requires_grad = True
+        if self.use_vit:
+            for parameter in self.vit.encoder.encoder.layers[-4:].parameters():
+                parameter.requires_grad = True
 
     def forward(self, inputs: dict[str, torch.Tensor] | torch.Tensor, tread_sequence: torch.Tensor | None = None) -> dict[str, torch.Tensor]:
         if isinstance(inputs, dict):
@@ -319,9 +342,12 @@ class HybridTireModel(nn.Module):
             sequence = tread_sequence
 
         cnn_features = self.cnn(image)
-        vit_features = self.vit(image)
+        vit_features = self.vit(image) if self.use_vit else None
         rnn_features = self.rnn(sequence)
-        vision_fused = torch.cat([cnn_features, vit_features], dim=1)
+        if self.use_vit:
+            vision_fused = torch.cat([cnn_features, vit_features], dim=1)
+        else:
+            vision_fused = cnn_features
         fused = self.fusion(cnn_features, vit_features, rnn_features)
         return {
             "tread_depths": self.tread_head(vision_fused),
@@ -340,9 +366,26 @@ def build_model_from_checkpoint(
     checkpoint: dict[str, Any],
     device: str | torch.device = "cpu",
 ) -> HybridTireModel:
-    model = HybridTireModel(pretrained=False)
     state_dict = checkpoint.get("model_state_dict", checkpoint)
-    model.load_state_dict(state_dict)
+    cfg = checkpoint.get("config", {})
+    model_cfg = checkpoint.get("model_config", None)
+
+    auto_configure = str(cfg.get("auto_configure", "false")).lower() in ("true", "1")
+
+    if auto_configure:
+        from ai_model.models.model_factory import SmartModelFactory
+        if model_cfg is None:
+            from ai_model.models.model_factory import select_models
+            model_cfg = select_models(767)
+        model = SmartModelFactory.from_config(model_cfg, pretrained=False)
+    else:
+        has_vit_keys = any("vit." in key for key in state_dict)
+        model = HybridTireModel(pretrained=False, use_vit=has_vit_keys)
+
+    missing, unexpected = model.load_state_dict(state_dict, strict=False)
+    if missing:
+        logger = logging.getLogger(__name__)
+        logger.warning("Missing keys when loading checkpoint: %s", missing)
     model.to(device)
     model.eval()
     return model

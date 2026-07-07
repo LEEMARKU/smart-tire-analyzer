@@ -314,6 +314,7 @@ class InferenceService:
         if image is None:
             return {"rejected": True, "reason": "Could not decode image"}
 
+        from ai_model.cnn.preprocessing import detect_blur, run_preprocessing_pipeline
         blur_threshold = float(settings.BLUR_THRESHOLD)
         is_blurry, blur_score = detect_blur(image, threshold=blur_threshold)
         if is_blurry:
