@@ -28,4 +28,7 @@
   ],
   "author": "Smart Tire Analyzer Team",
   "license": "MIT"
+  "name": "smart-tire-analyzer-deprecated-root",
+  "private": true,
+  "deprecated": "This root package.json has been replaced. Use frontend/package.json as the canonical package file. The root file is retained only as a marker and should be deleted before final cleanup."
 }
