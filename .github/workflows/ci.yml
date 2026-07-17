@@ -54,6 +54,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run frontend lint
+        run: npm run lint
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+
+      - name: Run frontend unit tests
+        run: npm test
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+
       - name: Build Next.js app
         run: npm run build
         env:
