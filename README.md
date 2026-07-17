@@ -296,7 +296,7 @@ smart-tire-analyzer/
 
 # Markus Lee 
 # viren_22co72
-# shubham chodankar
+# Shubham Chodankar
 ---
 
 ## License
