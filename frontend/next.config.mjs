@@ -1,45 +1,91 @@
-import { dirname } from "node:path"
-import { fileURLToPath } from "node:url"
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  turbopack: {
-    root: __dirname,
+  // ─── Compiler ───────────────────────────────────────────────────────────
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
   },
+
+  // ─── React ──────────────────────────────────────────────────────────────
+  reactStrictMode: true,
+
+  // ─── Images ─────────────────────────────────────────────────────────────
   images: {
-    unoptimized: true,
+    unoptimized: false,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
   },
+
+  // ─── Output ─────────────────────────────────────────────────────────────
+  output: 'standalone',
+
+  // ─── Build settings ─────────────────────────────────────────────────────
+  productionBrowserSourceMaps: false,
+  swcMinify: true,
+
+  // ─── Environment variables ──────────────────────────────────────────────
+  env: {
+    NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000',
+    NEXT_PUBLIC_APP_VERSION: '1.0.0',
+  },
+
+  // ─── Headers ────────────────────────────────────────────────────────────
   async headers() {
     return [
       {
-        source: '/(.*)',
+        source: '/:path*',
         headers: [
           {
-            key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://maps.googleapis.com https://api.openweathermap.org https://generativelanguage.googleapis.com https://graph.mapillary.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';",
+            key: 'X-DNS-Prefetch-Control',
+            value: 'on',
           },
           {
             key: 'X-Frame-Options',
-            value: 'DENY',
+            value: 'SAMEORIGIN',
           },
           {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
           },
           {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+          {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
           },
-          {
-            key: 'Permissions-Policy',
-            value: 'camera=(self), microphone=(), geolocation=(self), payment=()',
-          },
         ],
       },
-    ]
+    ];
   },
-}
 
-export default nextConfig
+  // ─── Redirects ──────────────────────────────────────────────────────────
+  async redirects() {
+    return [
+      {
+        source: '/dashboard',
+        destination: '/',
+        permanent: false,
+      },
+    ];
+  },
+
+  // ─── Rewrites ───────────────────────────────────────────────────────────
+  async rewrites() {
+    return {
+      beforeFiles: [
+        // Proxy /api/* to backend
+        {
+          source: '/api/:path*',
+          destination: `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/:path*`,
+        },
+      ],
+    };
+  },
+};
+
+export default nextConfig;

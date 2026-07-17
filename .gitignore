@@ -53,6 +53,7 @@ logs/
 *.sqlite
 *.sqlite3
 /data/
+smart_tire.db
 
 # IDE
 .idea/
