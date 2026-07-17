@@ -1,7 +1,31 @@
 {
   "name": "smart-tire-analyzer",
+  "version": "1.0.0",
   "private": true,
+  "description": "AI-powered cross-platform tire intelligence system",
   "scripts": {
-    "doctor": "npx react-doctor@latest"
-  }
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd frontend && npm run start",
+    "lint": "cd frontend && npm run lint",
+    "test": "cd frontend && npm run test",
+    "test:watch": "cd frontend && npm run test:watch",
+    "test:e2e": "cd frontend && npm run test:e2e",
+    "doctor": "npx react-doctor@latest",
+    "backend:dev": "cd backend && set PYTHONPATH=backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "backend:test": "cd backend && set PYTHONPATH=backend && pytest tests/ -v",
+    "backend:migrate": "python scripts/migrate_db.py --apply"
+  },
+  "workspaces": [
+    "frontend"
+  ],
+  "keywords": [
+    "tire",
+    "AI",
+    "deep-learning",
+    "computer-vision",
+    "safety"
+  ],
+  "author": "Smart Tire Analyzer Team",
+  "license": "MIT"
 }
